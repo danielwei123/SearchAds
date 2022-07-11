@@ -26,4 +26,27 @@ public class Ad implements Serializable{
     public String detail_url; // required
     public String query; //required
     public String category;
+
+    public void CloneAd(io.adserver.adindex.Ad ad){
+    	this.adId = ad.getAdId();
+    	this.campaignId = ad.getCampaignId();
+    	int keyWordsSize = ad.getKeyWordsList().size();
+    	this.keyWords = ad.getKeyWordsList().subList(0, keyWordsSize);
+    	this.relevanceScore = ad.getRelevanceScore();
+    	this.rankScore = ad.getRankScore();
+    	this.pClick = ad.getPClick();
+    	this.bidPrice = ad.getBidPrice();
+    	this.rankScore = ad.getRankScore();
+    	this.qualityScore = ad.getQualityScore();
+    	this.costPerClick = ad.getCostPerClick();
+    	this.position = ad.getPosition();
+    	this.title = ad.getTitle();
+    	this.price = ad.getPrice();
+    	this.thumbnail = ad.getThumbnail();
+    	this.description = ad.getDescription();
+    	this.brand = ad.getBrand();
+    	this.detail_url = ad.getDetailUrl();
+    	this.query = ad.getQuery();
+    	this.category = ad.getCategory();   			
+    }
 }

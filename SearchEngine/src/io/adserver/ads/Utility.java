@@ -64,4 +64,9 @@ public class Utility {
     	System.out.println("cleaned Tokens ="+ sb.toString());
 		return tokens;
 	}
+	
+    public static double sigmoid(double x ) {
+        double sig = 1 / (1 + Math.exp(-x));
+        return sig;
+    }
 }

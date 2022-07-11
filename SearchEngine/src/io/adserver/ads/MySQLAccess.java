@@ -38,9 +38,9 @@ public class MySQLAccess {
                Class.forName("com.mysql.jdbc.Driver");
                String conn = "jdbc:mysql://" + d_server_name + "/" + 
                        d_db_name+"?user="+d_user_name+"&password="+d_password;
-               System.out.println("Connecting to database: " + conn);
+               //System.out.println("Connecting to database: " + conn);
                d_connect = DriverManager.getConnection(conn);
-               System.out.println("Connected to database");
+               //System.out.println("Connected to database");
                return d_connect;
            } catch(Exception e) {
                throw e;

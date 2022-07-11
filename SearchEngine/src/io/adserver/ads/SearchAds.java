@@ -44,6 +44,8 @@ public class SearchAds extends HttpServlet {
 		ServletContext application = config.getServletContext();
 	    String adsDataFilePath = application.getInitParameter("adsDataFilePath");
 	    String budgetDataFilePath = application.getInitParameter("budgetDataFilePath");
+	    String logistic_reg_model_file = application.getInitParameter("ctrLogisticRegressionDataFilePath");
+	    String gbdt_model_path = application.getInitParameter("ctrGBDTDataFilePath");
 	    String uiTemplateFilePath = application.getInitParameter("uiTemplateFilePath");
 	    String adTemplateFilePath = application.getInitParameter("adTemplateFilePath");
 	    String memcachedServer = application.getInitParameter("memcachedServer");
@@ -51,8 +53,14 @@ public class SearchAds extends HttpServlet {
 	    String mysqlDb = application.getInitParameter("mysqlDB");
 	    String mysqlUser = application.getInitParameter("mysqlUser");
 	    String mysqlPass = application.getInitParameter("mysqlPass");
-	    int memcachedPortal = Integer.parseInt(application.getInitParameter("memcachedPortal"));
-		this.adsEngine = new AdsEngine(adsDataFilePath,budgetDataFilePath,memcachedServer,memcachedPortal,mysqlHost,mysqlDb,mysqlUser,mysqlPass);
+	    int memcachedPortal = Integer.parseInt(application.getInitParameter("memcachedPortal")); 
+	    int featureMemcachedPortal = Integer.parseInt(application.getInitParameter("featureMemcachedPortal"));
+	    int synonymsMemcachedPortal = Integer.parseInt(application.getInitParameter("synonymsMemcachedPortal"));
+	    int tfMemcachedPortal = Integer.parseInt(application.getInitParameter("tfMemcachedPortal"));
+	    int dfMemcachedPortal = Integer.parseInt(application.getInitParameter("dfMemcachedPortal"));
+		this.adsEngine = new AdsEngine(adsDataFilePath,budgetDataFilePath,logistic_reg_model_file,gbdt_model_path,
+				memcachedServer, memcachedPortal,featureMemcachedPortal,synonymsMemcachedPortal,tfMemcachedPortal,dfMemcachedPortal,
+				mysqlHost,mysqlDb,mysqlUser,mysqlPass);
 		this.adsEngine.init();  
 		System.out.println("adsEngine initilized");
 		//load UI template
@@ -76,7 +84,11 @@ public class SearchAds extends HttpServlet {
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		// TODO Auto-generated method stub
 		String query = request.getParameter("q");
-		List<Ad> adsCandidates = adsEngine.selectAds(query);
+		String device_id = request.getParameter("did");
+		String device_ip = request.getParameter("dip");
+		String query_category = request.getParameter("qclass");
+
+		List<Ad> adsCandidates = adsEngine.selectAds(query,device_id,device_ip,query_category);
 		String result = uiTemplate;
         String list = "";
 		for(Ad ad : adsCandidates)

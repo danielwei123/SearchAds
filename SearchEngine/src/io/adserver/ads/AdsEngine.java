@@ -5,30 +5,53 @@ import java.io.IOException;
 
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.HashSet;
+import java.util.Set;
 import org.json.*;
+
+import io.adserver.adindex.AdsIndexClientWorker;
+import io.adserver.adindex.AdsSelectionResult;
 
 public class AdsEngine {
 	private String mAdsDataFilePath;
 	private String mBudgetFilePath;
+	String m_logistic_reg_model_file;
+	String m_gbdt_model_path;
 	private IndexBuilder indexBuilder;
 	private String mMemcachedServer;
 	private int mMemcachedPortal;
+	private int mFeatureMemcachedPortal;
+	private int mSynonymsMemcachedPortal;
+	private int mTFMemcachedPortal;
+	private int mDFMemcachedPortal;
 	private String mysql_host;
 	private String mysql_db;
 	private String mysql_user;
 	private String mysql_pass;
+	private Boolean enable_query_rewrite;
+	private int indexServerTimeout; //ms
 	
-	public AdsEngine(String adsDataFilePath, String budgetDataFilePath,String memcachedServer,int memcachedPortal,String mysqlHost,String mysqlDb,String user,String pass)
+	public AdsEngine(String adsDataFilePath, String budgetDataFilePath,String logistic_reg_model_file, 
+			String gbdt_model_path, String memcachedServer,int memcachedPortal,int featureMemcachedPortal,int synonymsMemcachedPortal,
+			int tfMemcachedPortal, int dfMemcachedPortal,
+			String mysqlHost,String mysqlDb,String user,String pass)
 	{
 		mAdsDataFilePath = adsDataFilePath;
 		mBudgetFilePath = budgetDataFilePath;
+		m_logistic_reg_model_file = logistic_reg_model_file;
+		m_gbdt_model_path = gbdt_model_path;
 		mMemcachedServer = memcachedServer;
 		mMemcachedPortal = memcachedPortal;
+		mTFMemcachedPortal = tfMemcachedPortal;
+		mDFMemcachedPortal = dfMemcachedPortal;
+		mFeatureMemcachedPortal = featureMemcachedPortal;
+		mSynonymsMemcachedPortal = synonymsMemcachedPortal;
 		mysql_host = mysqlHost;
 		mysql_db = mysqlDb;	
 		mysql_user = user;
 		mysql_pass = pass;	
+		enable_query_rewrite = false;
+		indexServerTimeout = 1000;
 		indexBuilder = new IndexBuilder(memcachedServer,memcachedPortal,mysql_host,mysql_db,mysql_user,mysql_pass);
 	}
 	
@@ -60,11 +83,15 @@ public class AdsEngine {
 				{
 					ad.keyWords.add(keyWords.getString(j));
 				}
-				
+//				if(!indexBuilder.buildInvertIndex(ad)) {
+//					
+//				}
+				/*
 				if(!indexBuilder.buildInvertIndex(ad) || !indexBuilder.buildForwardIndex(ad))
 				{
 					//log				
 				}
+				*/
 			}
 
 		} catch (IOException e) {
@@ -91,26 +118,121 @@ public class AdsEngine {
 		}
 		return true;
 	}
-	public List<Ad> selectAds(String query)
+	private Ad CloneAd(io.adserver.adindex.Ad ad){
+		Ad result = new Ad(); 
+		result.adId = ad.getAdId();
+		result.campaignId = ad.getCampaignId();
+    	int keyWordsSize = ad.getKeyWordsList().size();
+    	result.keyWords = ad.getKeyWordsList().subList(0, keyWordsSize);
+    	result.relevanceScore = ad.getRankScore();
+    	result.pClick = ad.getPClick();
+    	result.bidPrice = ad.getBidPrice();
+    	result.rankScore = ad.getRankScore();
+    	result.qualityScore = ad.getQualityScore();
+    	result.costPerClick = ad.getCostPerClick();
+    	result.position = ad.getPosition();
+    	result.title = ad.getTitle();
+    	result.price = ad.getPrice();
+    	result.thumbnail = ad.getThumbnail();
+    	result.description = ad.getDescription();
+    	result.brand = ad.getBrand();
+    	result.detail_url = ad.getDetailUrl();
+    	result.query = ad.getQuery();
+    	result.category = ad.getCategory();   
+    	return result;
+    }
+	private AdsSelectionResult getAdsFromIndexServer(List<String> queryTerms) {
+		AdsSelectionResult adsResult = new AdsSelectionResult();
+		io.adserver.adindex.Query.Builder _query =  io.adserver.adindex.Query.newBuilder();
+		for(int i = 0; i< queryTerms.size();i++) {
+			System.out.println("term = " + queryTerms.get(i));
+			_query.addTerm(queryTerms.get(i));
+		}
+		System.out.println("term count= " + _query.getTermCount());	
+		java.util.List<io.adserver.adindex.Query> queryList = new ArrayList<io.adserver.adindex.Query>();
+		queryList.add(_query.build());
+		//design choice
+		//#1 sequentially call index server 1, 2, 3...
+		//#2 parallel call index server 1, 2, 3...
+		AdsIndexClientWorker adsIndexClient1 = new AdsIndexClientWorker(queryList, "127.0.0.1",50051,adsResult);
+		AdsIndexClientWorker adsIndexClient2 = new AdsIndexClientWorker(queryList, "127.0.0.1",50052,adsResult);
+		adsIndexClient1.start();
+		adsIndexClient2.start();
+		//design choice
+		try {
+			adsIndexClient1.join(indexServerTimeout);
+		} catch (InterruptedException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		try {
+			adsIndexClient2.join(indexServerTimeout);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return adsResult;
+	}
+	public List<Ad> selectAds(String query, String device_id, String device_ip, String query_category)
 	{
 		//query understanding
-		List<String> queryTerms = QueryParser.getInstance().QueryUnderstand(query);
-		//select ads candidates
-		List<Ad> adsCandidates = AdsSelector.getInstance(mMemcachedServer, mMemcachedPortal,mysql_host, mysql_db,mysql_user, mysql_pass).selectAds(queryTerms);		
+		//raw query: nike running shoe
+		//running == jogging
+		//nike running shoe => nike jogging shoe	
+		List<Ad> adsCandidates = new ArrayList<Ad>();
+		if (enable_query_rewrite) {
+			List<List<String>> rewrittenQuery =  QueryParser.getInstance().QueryRewrite(query, mMemcachedServer, mSynonymsMemcachedPortal);		
+			Set<Long> uniquueAds = new HashSet<Long>();		
+			//select ads candidates
+			for (List<String> queryTerms : rewrittenQuery) {	
+				List<Ad> adsCandidates_temp = AdsSelector.getInstance(mMemcachedServer, mMemcachedPortal,mFeatureMemcachedPortal,mTFMemcachedPortal,mDFMemcachedPortal,
+						m_logistic_reg_model_file,m_gbdt_model_path, mysql_host, mysql_db,mysql_user, mysql_pass).selectAds(queryTerms,device_id, device_ip, query_category);	
+				for(Ad ad : adsCandidates_temp) {
+					if (!uniquueAds.contains(ad.adId)) {
+						adsCandidates.add(ad);
+					}
+				}
+			}
+			//TODO: give ads selected by rewritten query lower rank score
+
+		} else {
+			List<String> queryTerms = QueryParser.getInstance().QueryUnderstand(query);
+			AdsSelectionResult adsResult = getAdsFromIndexServer(queryTerms);
+			System.out.println("Number of  ads from index server = " + adsResult.getAdsList().size());
+			//convert ads
+			for(io.adserver.adindex.Ad _ad : adsResult.getAdsList()) {
+				System.out.println("relevance score = " + _ad.getRelevanceScore());
+				Ad ad = new Ad(); 
+				ad.CloneAd(_ad);
+				System.out.println("relevance score = " + ad.relevanceScore);
+				adsCandidates.add(ad);
+			}
+			System.out.println("Number of adsCandidates = " + adsCandidates.size());
+
+			//adsCandidates = AdsSelector.getInstance(mMemcachedServer, mMemcachedPortal,mFeatureMemcachedPortal,mTFMemcachedPortal, mDFMemcachedPortal,
+				//m_logistic_reg_model_file,m_gbdt_model_path, mysql_host, mysql_db,mysql_user, mysql_pass).selectAds(queryTerms,device_id, device_ip, query_category);			
+		}
+			
 		//L0 filter by pClick, relevance score
-		List<Ad> L0unfilteredAds = AdsFilter.getInstance().LevelZeroFilterAds(adsCandidates);
-		System.out.println("L0unfilteredAds ads left = " + L0unfilteredAds.size());
+		//List<Ad> L0unfilteredAds = AdsFilter.getInstance().LevelZeroFilterAds(adsCandidates);
+		//System.out.println("L0unfilteredAds ads left = " + L0unfilteredAds.size());
+
+		//rank 
+		List<Ad> rankedAds = AdsRanker.getInstance().rankAds(adsCandidates);
+		System.out.println("rankedAds ads left = " + rankedAds.size());
 
 		//L1 filter by relevance score : select top K ads
 		int k = 20;
-		List<Ad> unfilteredAds = AdsFilter.getInstance().LevelOneFilterAds(L0unfilteredAds,k);
+		List<Ad> unfilteredAds = AdsFilter.getInstance().LevelOneFilterAds(rankedAds,k);
 		System.out.println("unfilteredAds ads left = " + unfilteredAds.size());
 
 		//Dedupe ads per campaign
 		List<Ad> dedupedAds = AdsCampaignManager.getInstance(mysql_host, mysql_db,mysql_user, mysql_pass).DedupeByCampaignId(unfilteredAds);
 		System.out.println("dedupedAds ads left = " + dedupedAds.size());
 
-		
+		//pricing： next rank score/current score * current bid price
+		AdPricing.getInstance().setCostPerClick(dedupedAds);
+		//filter last one , ad without budget , ads with CPC < minReservePrice
 		List<Ad> ads = AdsCampaignManager.getInstance(mysql_host, mysql_db,mysql_user, mysql_pass).ApplyBudget(dedupedAds);
 		System.out.println("AdsCampaignManager ads left = " + ads.size());
 

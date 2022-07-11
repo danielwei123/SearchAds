@@ -5,6 +5,7 @@ import java.util.List;
 public class AdsAllocation {
 	private static AdsAllocation instance = null;
 	private static double mainLinePriceThreshold = 4.5;
+	private static double mainLineRankScoreThreshold = 1.0;
 	protected AdsAllocation()
 	{
 
@@ -19,7 +20,7 @@ public class AdsAllocation {
 	{
 		for(Ad ad : ads)
 		{
-			if(ad.costPerClick >= mainLinePriceThreshold)
+			if(ad.costPerClick >= mainLinePriceThreshold && ad.rankScore >= mainLineRankScoreThreshold)
 			{
 				ad.position = 1;
 			}

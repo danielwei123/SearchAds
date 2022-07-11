@@ -13,7 +13,7 @@ import java.util.List;
 5. Allocation: only ads with rankScore > mainlineReservePrice can be allocated on mainline. 
 
 reference：
-http://adserverland.com/new-adwords-ad-ranking-formula-what-does-it-mean-174946
+http://searchengineland.com/new-adwords-ad-ranking-formula-what-does-it-mean-174946
 http://www.wordstream.com/blog/ws/2013/10/24/adwords-ad-rank-algorithm
 */ 
 public class AdsServer {
@@ -31,7 +31,7 @@ public class AdsServer {
 		String mysql_db = "searchads";
 		String mysql_user = "root";
 		String mysql_pass = "adserver2017";
-		AdsEngine adsEngine = new AdsEngine(adsDataFilePath,budgetDataFilePath,memcachedServer,memcachedPortal,mysql_host,mysql_db,mysql_user,mysql_pass);
+		AdsEngine adsEngine = new AdsEngine(adsDataFilePath,budgetDataFilePath,"","",memcachedServer,memcachedPortal,11218,11219,11220,11221, mysql_host,mysql_db,mysql_user,mysql_pass);
 		if(adsEngine.init())
 		{
 			System.out.println("Ready to take quey");
@@ -40,7 +40,7 @@ public class AdsServer {
 				String query;				
 				while((query=br.readLine())!=null){
 					//System.out.println(query);
-					List<Ad> adsCandidates = adsEngine.selectAds(query);
+					List<Ad> adsCandidates = adsEngine.selectAds(query,"","","");
 					for(Ad ad : adsCandidates)
 					{
 						System.out.println("final selected ad id = " + ad.adId);

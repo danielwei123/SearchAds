@@ -12,7 +12,7 @@ public class AdsCampaignManager {
 	private String mysql_db;
 	private String mysql_user;
 	private String mysql_pass;
-	private static double minPriceThreshold = 0.0;
+	private static double minPriceThreshold = 0.1;
 	protected AdsCampaignManager(String mysqlHost,String mysqlDb,String user,String pass)
 	{
 		mysql_host = mysqlHost;
@@ -55,7 +55,12 @@ public class AdsCampaignManager {
 				System.out.println("AdsCampaignManager ad.costPerClick= " + ad.costPerClick);
 				System.out.println("AdsCampaignManager campaignId= " + campaignId);
 				System.out.println("AdsCampaignManager budget left = " + budget);
-
+				//design choice
+				//#1 transaction
+				//#2 offline process
+				//ApplyBudget log: tractionId(sessionID), campaignId, ad.costPerClick
+				//1.set budget buffer and alert on 10% of budget left on campaignId 9999 -> offline process campaignId 9999
+				//2.reduce offline process frequency 
 				if(ad.costPerClick <= budget && ad.costPerClick >= minPriceThreshold)
 				{
 					ads.add(ad);
